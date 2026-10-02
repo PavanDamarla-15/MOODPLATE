@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-cream-50 text-brown-800 font-sans antialiased;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight;
+  }
+
+  ::selection {
+    @apply bg-coral-200 text-brown-900;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-3xl border border-cream-200 shadow-soft transition-all duration-300;
+  }
+
+  .card-hover {
+    @apply hover:shadow-soft-lg hover:-translate-y-1;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-coral-500 px-6 py-3.5 text-sm font-bold text-white transition-all duration-300 hover:bg-coral-600 hover:shadow-coral active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border-2 border-coral-200 bg-white px-6 py-3.5 text-sm font-bold text-coral-600 transition-all duration-300 hover:border-coral-400 hover:bg-coral-50 active:scale-[0.98];
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-brown-500 transition-all hover:text-coral-600 hover:bg-coral-50;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-2xs font-semibold;
+  }
+
+  .input-field {
+    @apply w-full rounded-2xl border border-cream-300 bg-white px-4 py-3 text-sm text-brown-800 placeholder:text-brown-400/50 outline-none transition-all focus:border-coral-400 focus:ring-2 focus:ring-coral-200/40;
+  }
+
+  .section-pad {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+}
+
+@layer utilities {
+  .reveal {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.7s cubic-bezier(0.16,1,0.3,1), transform 0.7s cubic-bezier(0.16,1,0.3,1);
+  }
+  .reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .stagger > * {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1);
+  }
+  .stagger.is-visible > *:nth-child(1) { transition-delay: 0ms; opacity:1; transform:translateY(0); }
+  .stagger.is-visible > *:nth-child(2) { transition-delay: 80ms; opacity:1; transform:translateY(0); }
+  .stagger.is-visible > *:nth-child(3) { transition-delay: 160ms; opacity:1; transform:translateY(0); }
+  .stagger.is-visible > *:nth-child(4) { transition-delay: 240ms; opacity:1; transform:translateY(0); }
+  .stagger.is-visible > *:nth-child(5) { transition-delay: 320ms; opacity:1; transform:translateY(0); }
+  .stagger.is-visible > *:nth-child(6) { transition-delay: 400ms; opacity:1; transform:translateY(0); }
+  .stagger.is-visible > *:nth-child(7) { transition-delay: 480ms; opacity:1; transform:translateY(0); }
+  .stagger.is-visible > *:nth-child(8) { transition-delay: 560ms; opacity:1; transform:translateY(0); }
+
+  .text-gradient-coral {
+    @apply bg-gradient-to-r from-coral-500 via-coral-600 to-coral-500 bg-clip-text text-transparent;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,107,74,0.3) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { @apply bg-coral-300/50 rounded-full; }
+
+  .bg-dots {
+    background-image: radial-gradient(circle, rgba(232, 83, 48, 0.07) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}
