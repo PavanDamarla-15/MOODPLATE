@@ -189,17 +189,46 @@ function analyzeMessage(text: string): {
   }
 
   // -----------------------------
-  // SPICE LEVEL
-  // -----------------------------
+// SPICE LEVEL
+// -----------------------------
 
-  let minSpiceLevel: number | null = null;
+let minSpiceLevel: number | null = null;
 
-  if (/extremely spicy|very spicy|extra spicy|super spicy/.test(q)) {
-    minSpiceLevel = 3;
-    detected.push('very spicy');
-  } else if (/spicy|hot|chili|chilli|fire/.test(q)) {
-    minSpiceLevel = 2;
-  }
+// Explicit low / no-spice requests
+if (
+  /not spicy|no spice|non[- ]?spicy|mild|less spicy|lightly spicy|not too spicy/.test(
+    q
+  )
+) {
+  minSpiceLevel = 0;
+  detected.push('mild / not spicy');
+}
+
+// Very high spice
+else if (
+  /extremely spicy|very spicy|extra spicy|super spicy|fiery|blazing hot/.test(
+    q
+  )
+) {
+  minSpiceLevel = 3;
+  detected.push('very spicy');
+}
+
+// Normal spicy request
+else if (
+  /spicy|hot|chili|chilli|fire|masala/.test(q)
+) {
+  minSpiceLevel = 2;
+  detected.push('spicy');
+}
+
+// Medium spice
+else if (
+  /medium spicy|moderately spicy|medium heat/.test(q)
+) {
+  minSpiceLevel = 1;
+  detected.push('medium spicy');
+}
 
   // -----------------------------
   // BUILD PREFERENCES
