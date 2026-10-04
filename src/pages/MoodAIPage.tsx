@@ -132,7 +132,7 @@ export function MoodAIPage({ onNavigate, onViewDish }: MoodAIPageProps) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, typing]);
 
-  const handleSend = (text: string) => {
+  const handleSend = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || typing) return;
 
@@ -140,11 +140,58 @@ export function MoodAIPage({ onNavigate, onViewDish }: MoodAIPageProps) {
     setInput('');
     setTyping(true);
 
-    setTimeout(() => {
-      const response = generateResponse(trimmed);
-      setMessages((prev) => [...prev, response]);
+    try {
+      const history = messages.map((msg) => ({
+        role: msg.role === 'ai' ? 'assistant' : 'user',
+        content: msg.content,
+      }));
+
+      const response = await fetch('/api/mood-ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: trimmed,
+          history,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'AI request failed');
+      }
+
+      const recommendedDishes: Dish[] = Array.isArray(data.dishIds)
+        ? data.dishIds
+            .map((id: string): Dish | undefined =>
+              dishes.find((dish: Dish) => dish.id === id)
+            )
+            .filter((dish: Dish | undefined): dish is Dish => Boolean(dish))
+        : [];
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'ai',
+          content: data.message || 'Sorry, I could not generate a response.',
+          dishes: recommendedDishes,
+        },
+      ]);
+    } catch (error) {
+      console.error('MOODPLATE AI error:', error);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'ai',
+          content: 'Sorry, something went wrong while connecting to MOODPLATE AI. Please try again.',
+        },
+      ]);
+    } finally {
       setTyping(false);
-    }, 1000 + Math.random() * 500);
+    }
   };
 
   return (

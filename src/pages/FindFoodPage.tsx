@@ -34,8 +34,20 @@ export function FindFoodPage({ onNavigate, onFind, initialMood }: FindFoodPagePr
     }
     setValidationMessage('');
     setFinding(true);
+
+    const selectedMood = mood;
+    const selectedCuisine = cuisine;
+    const selectedBudget = budget;
+    const selectedTime = time;
+
     window.setTimeout(() => {
-      onFind({ moods: [mood], cuisines: [cuisine], budget, time });
+      if (!selectedMood || !selectedCuisine || !selectedBudget || !selectedTime) return;
+      onFind({
+        moods: [selectedMood],
+        cuisines: [selectedCuisine],
+        budget: selectedBudget,
+        time: selectedTime,
+      });
     }, 350);
   };
 
