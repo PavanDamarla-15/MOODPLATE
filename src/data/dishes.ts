@@ -258,45 +258,145 @@ export interface Preferences {
   cuisines: Cuisine[];
   budget: BudgetRange | null;
   time: TimeRange | null;
+
+  // Hard constraints
+  diet: DietType | null;
+  maxPrice: number | null;
+  maxPrepTime: number | null;
+  exactTimeAllowed: boolean;
+  minSpiceLevel: number | null;
 }
 
-export function scoreDish(dish: Dish, prefs: Preferences): { score: number; reasons: string[] } {
+export function scoreDish(
+  dish: Dish,
+  prefs: Preferences
+): { score: number; reasons: string[] } {
   let score = 0;
   const reasons: string[] = [];
 
+  /*
+   * HARD CONSTRAINTS
+   *
+   * These are non-negotiable.
+   * A dish that violates one of them receives
+   * a score of -Infinity and will never be recommended.
+   */
+
+  if (prefs.diet && dish.diet !== prefs.diet) {
+    return {
+      score: -Infinity,
+      reasons: [],
+    };
+  }
+
+  if (
+    prefs.maxPrice !== null &&
+    dish.price > prefs.maxPrice
+  ) {
+    return {
+      score: -Infinity,
+      reasons: [],
+    };
+  }
+
+  // Explicit cuisine selection is a hard requirement.
+  if (
+    prefs.cuisines.length > 0 &&
+    !prefs.cuisines.includes(dish.cuisine)
+  ) {
+    return {
+      score: -Infinity,
+      reasons: [],
+    };
+  }
+
+  if (prefs.maxPrepTime !== null) {
+    const exceedsTime = prefs.exactTimeAllowed
+      ? dish.prepTime > prefs.maxPrepTime
+      : dish.prepTime >= prefs.maxPrepTime;
+
+    if (exceedsTime) {
+      return {
+        score: -Infinity,
+        reasons: [],
+      };
+    }
+  }
+
+  if (
+    prefs.minSpiceLevel !== null &&
+    dish.spiceLevel < prefs.minSpiceLevel
+  ) {
+    return {
+      score: -Infinity,
+      reasons: [],
+    };
+  }
+
+  /*
+   * SOFT PREFERENCES
+   *
+   * These determine ranking among valid dishes.
+   */
+
   prefs.moods.forEach((m) => {
     if (dish.moods.includes(m)) {
-      score += 4;
-      reasons.push(`Matches your "${m.toLowerCase()}" mood`);
+      score += 5;
+      reasons.push(
+        `Matches your "${m.toLowerCase()}" mood`
+      );
     }
   });
 
   prefs.cuisines.forEach((c) => {
     if (dish.cuisine === c) {
-      score += 3;
-      reasons.push(`${c} cuisine — exactly what you picked`);
+      score += 5;
+      reasons.push(
+        `${c} cuisine — exactly what you picked`
+      );
     }
   });
 
   if (prefs.budget) {
     const dishBudget = priceToBudget(dish.price);
+
     if (dishBudget === prefs.budget) {
       score += 2;
-      reasons.push(`Fits your budget of ${prefs.budget}`);
+      reasons.push(
+        `Fits your budget of ${prefs.budget}`
+      );
     }
   }
 
   if (prefs.time) {
-    const dishTime = prepTimeToRange(dish.prepTime);
+    const dishTime =
+      prepTimeToRange(dish.prepTime);
+
     if (dishTime === prefs.time) {
       score += 2;
-      reasons.push(`Ready in ${dishTime.toLowerCase()} — matches your time preference`);
+      reasons.push(
+        `Ready in ${dishTime.toLowerCase()} — matches your time preference`
+      );
     }
   }
 
+  if (
+    prefs.minSpiceLevel !== null &&
+    dish.spiceLevel >= prefs.minSpiceLevel
+  ) {
+    score += 3;
+    reasons.push(
+      `Spice level ${dish.spiceLevel}/3 matches your preference`
+    );
+  }
+
+  // Popularity is only a tie-breaker.
   score += dish.popularity / 100;
 
-  return { score, reasons };
+  return {
+    score,
+    reasons,
+  };
 }
 
 export function recommendDishes(
@@ -307,10 +407,20 @@ export function recommendDishes(
   return dishes
     .filter((d) => !exclude.includes(d.id))
     .map((d) => {
-      const { score, reasons } = scoreDish(d, prefs);
-      return { dish: d, reasons, score };
+      const { score, reasons } =
+        scoreDish(d, prefs);
+
+      return {
+        dish: d,
+        score,
+        reasons,
+      };
     })
-    .filter((r) => r.score > 0)
+    // Remove dishes that violate hard constraints.
+    .filter((result) =>
+      Number.isFinite(result.score)
+    )
+    .filter((result) => result.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, count);
 }

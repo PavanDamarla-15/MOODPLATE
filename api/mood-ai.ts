@@ -129,19 +129,44 @@ const menu = [
   },
 ];
 
+const dishIdMap: Record<string, string> = {
+  'Creamy Mushroom Pasta': 'creamy-mushroom-pasta',
+  'Paneer Tikka Wrap': 'paneer-tikka-wrap',
+  'Butter Chicken Bowl': 'butter-chicken-bowl',
+  'Wood-Fired Margherita Pizza': 'margherita-pizza',
+  'Spicy Tonkotsu Ramen': 'spicy-ramen-bowl',
+  'Garden Quinoa Buddha Bowl': 'veggie-quinoa-bowl',
+  'Loaded Cheeseburger': 'loaded-beef-burger',
+  'Street-Style Taco Platter': 'mexican-taco-platter',
+  'Steamed Veg Momos': 'steamed-momo-platter',
+  'Chocolate Lava Cake': 'chocolate-lava-cake',
+  'Paneer Butter Masala': 'paneer-butter-masala',
+  'Vietnamese Beef Pho': 'vietnamese-pho',
+  'Grilled Chicken Power Salad': 'grilled-chicken-salad',
+  'Black Bean Veg Tacos': 'spicy-veg-tacos',
+};
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({
+      error: 'Method not allowed',
+    });
   }
 
   try {
-    const { message, history = [] } = req.body ?? {};
+    const {
+      message,
+      history = [],
+      candidateDishNames = [],
+    } = req.body ?? {};
 
     if (!message || typeof message !== 'string') {
-      return res.status(400).json({ error: 'Message is required' });
+      return res.status(400).json({
+        error: 'Message is required',
+      });
     }
 
     const apiKey = process.env.OPENROUTER_API_KEY;
@@ -153,33 +178,72 @@ export default async function handler(
       });
     }
 
+    /*
+     * IMPORTANT:
+     * The frontend recommendation engine has already selected
+     * the dishes that satisfy the user's requirements.
+     *
+     * The AI is NOT allowed to select different dishes.
+     */
+    const candidates = Array.isArray(candidateDishNames)
+      ? candidateDishNames
+          .filter((name: unknown): name is string =>
+            typeof name === 'string'
+          )
+          .map((name: string) =>
+            menu.find((dish) => dish.name === name)
+          )
+          .filter((dish): dish is (typeof menu)[number] =>
+            Boolean(dish)
+          )
+      : [];
+
+    const candidateMenu = candidates;
+
+    // No valid dishes means the user's hard constraints cannot be satisfied.
+    // Do not call the AI or allow it to invent an alternative.
+    if (candidateMenu.length === 0) {
+      return res.status(200).json({
+        message:
+          "I couldn't find a dish that matches all of those requirements. 😕 Try relaxing one requirement, such as increasing your budget, allowing more preparation time, or choosing another cuisine.",
+        dishIds: [],
+      });
+    }
+
     const systemPrompt = `
-You are MOODPLATE AI, the food recommendation assistant for the MOODPLATE website.
+You are MOODPLATE AI, the food recommendation assistant.
 
-IMPORTANT RULE:
-You may ONLY recommend dishes that exist in the MOODPLATE menu below.
+IMPORTANT:
+The recommendation engine has already selected the valid dishes.
 
-Never invent a dish, restaurant item, price, rating, or menu item.
+You MUST NOT choose a different dish.
 
-If the user asks for a specific food that is NOT in the menu, clearly say that it is not currently available in the MOODPLATE menu and then suggest relevant dishes that ARE in the menu.
+You MUST NOT invent dishes.
 
-For example, if the user asks for biryani and there is no biryani in the menu, do NOT invent Hyderabadi Biryani or any other biryani. Say that biryani is not currently available and recommend suitable Indian dishes from the menu.
+You MUST NOT recommend dishes outside the CANDIDATE DISHES list below.
 
-MOODPLATE MENU:
-${JSON.stringify(menu, null, 2)}
+Your job is ONLY to explain the candidate dishes and respond naturally to the user's request.
 
-Help users based on:
-- craving
-- mood
-- cuisine
-- budget
-- dietary preference
-- preparation time
-- spice preference
+If candidate dishes are provided, recommend only from those candidates.
 
-When recommending dishes, use the exact dish names and prices from the menu.
+If the user asks for a dish that is not available, explain that it is not currently available.
+
+CANDIDATE DISHES:
+${JSON.stringify(candidateMenu, null, 2)}
 
 Keep responses friendly, concise, and useful.
+
+Use exact dish names and prices.
+
+IMPORTANT RESPONSE FORMAT:
+- Do NOT use Markdown links.
+- Do NOT include image URLs.
+- Do NOT include HTML.
+- Do NOT create buttons or links.
+- Do NOT repeat the full dish card information.
+- Do NOT include ratings, image URLs, or extra metadata unless specifically asked.
+- Mention dish names and prices naturally in your response.
+- The MOODPLATE website will display the dish cards separately.
 `;
 
     const response = await fetch(
@@ -223,30 +287,17 @@ Keep responses friendly, concise, and useful.
 
     const reply =
       data?.choices?.[0]?.message?.content ||
-      'Sorry, I could not generate a response.';
+      'Here are some dishes that match your preferences.';
 
-    const dishIdMap: Record<string, string> = {
-      'Creamy Mushroom Pasta': 'creamy-mushroom-pasta',
-      'Paneer Tikka Wrap': 'paneer-tikka-wrap',
-      'Butter Chicken Bowl': 'butter-chicken-bowl',
-      'Wood-Fired Margherita Pizza': 'margherita-pizza',
-      'Spicy Tonkotsu Ramen': 'spicy-ramen-bowl',
-      'Garden Quinoa Buddha Bowl': 'veggie-quinoa-bowl',
-      'Loaded Cheeseburger': 'loaded-beef-burger',
-      'Street-Style Taco Platter': 'mexican-taco-platter',
-      'Steamed Veg Momos': 'steamed-momo-platter',
-      'Chocolate Lava Cake': 'chocolate-lava-cake',
-      'Paneer Butter Masala': 'paneer-butter-masala',
-      'Vietnamese Beef Pho': 'vietnamese-pho',
-      'Grilled Chicken Power Salad': 'grilled-chicken-salad',
-      'Black Bean Veg Tacos': 'spicy-veg-tacos',
-    };
-
-    const dishIds = Object.entries(dishIdMap)
-      .filter(([name]) =>
-        reply.toLowerCase().includes(name.toLowerCase())
-      )
-      .map(([, id]) => id);
+    /*
+     * Return ONLY the candidate dish IDs.
+     *
+     * We no longer scan the AI's text looking for dish names.
+     * This prevents the AI from accidentally adding another dish.
+     */
+    const dishIds = candidates
+      .map((dish) => dishIdMap[dish.name])
+      .filter(Boolean);
 
     return res.status(200).json({
       message: reply,

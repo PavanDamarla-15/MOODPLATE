@@ -24,44 +24,203 @@ const quickChips = [
   'Late night 🌙',
 ];
 
-function analyzeMessage(text: string): { prefs: Preferences; detected: string[] } {
+function analyzeMessage(text: string): {
+  prefs: Preferences;
+  detected: string[];
+} {
   const q = text.toLowerCase();
+
   const moods: Mood[] = [];
   const cuisines: Cuisine[] = [];
   const detected: string[] = [];
 
-  if (/spic|hot|chili|chilli|fire/.test(q)) { moods.push('Spicy'); detected.push('spicy'); }
-  if (/comfort|cozy|warm|home|tired|sad|stress/.test(q)) { moods.push('Comfort'); detected.push('comfort'); }
-  if (/health|fit|clean|light|nutrit|salad|protein/.test(q)) { moods.push('Healthy'); detected.push('healthy'); }
-  if (/hungry|starv|quick|fast|filling|satisfy/.test(q)) { moods.push('Hungry'); detected.push('hungry'); }
-  if (/celebr|party|special|treat|birthday/.test(q)) { moods.push('Celebrating'); detected.push('celebrating'); }
-  if (/late night|midnight|night|craving|2am|3am/.test(q)) { moods.push('Late Night'); detected.push('late night'); }
+  // -----------------------------
+  // MOOD
+  // -----------------------------
 
-  if (/indian|curry|paneer|tikka|biryani|naan/.test(q)) { cuisines.push('Indian'); detected.push('Indian'); }
-  if (/italian|pasta|pizza|risotto/.test(q)) { cuisines.push('Italian'); detected.push('Italian'); }
-  if (/asian|noodle|ramen|pho|dumpling|momo|chinese|japanese|thai/.test(q)) { cuisines.push('Asian'); detected.push('Asian'); }
-  if (/mexican|taco|burrito|quesadilla/.test(q)) { cuisines.push('Mexican'); detected.push('Mexican'); }
-  if (/fast food|burger|fries|junk/.test(q)) { cuisines.push('Fast Food'); detected.push('fast food'); }
+  if (/spic|hot|chili|chilli|fire/.test(q)) {
+    moods.push('Spicy');
+    detected.push('spicy');
+  }
+
+  if (/comfort|cozy|warm|home|tired|sad|stress/.test(q)) {
+    moods.push('Comfort');
+    detected.push('comfort');
+  }
+
+  if (/health|fit|clean|light|nutrit|salad|protein/.test(q)) {
+    moods.push('Healthy');
+    detected.push('healthy');
+  }
+
+  if (/hungry|starv|filling|satisfy/.test(q)) {
+    moods.push('Hungry');
+    detected.push('hungry');
+  }
+
+  if (/celebr|party|special|treat|birthday/.test(q)) {
+    moods.push('Celebrating');
+    detected.push('celebrating');
+  }
+
+  if (/late.?night|midnight|2am|3am|night craving/.test(q)) {
+    moods.push('Late Night');
+    detected.push('late night');
+  }
+
+  // -----------------------------
+  // CUISINE
+  // -----------------------------
+
+  if (/indian|curry|paneer|tikka|biryani|naan/.test(q)) {
+    cuisines.push('Indian');
+    detected.push('Indian');
+  }
+
+  if (/italian|pasta|pizza|risotto/.test(q)) {
+    cuisines.push('Italian');
+    detected.push('Italian');
+  }
+
+  if (/asian|noodle|ramen|pho|dumpling|momo|chinese|japanese|thai/.test(q)) {
+    cuisines.push('Asian');
+    detected.push('Asian');
+  }
+
+  if (/mexican|taco|burrito|quesadilla/.test(q)) {
+    cuisines.push('Mexican');
+    detected.push('Mexican');
+  }
+
+  if (/fast food|burger|fries|junk/.test(q)) {
+    cuisines.push('Fast Food');
+    detected.push('Fast Food');
+  }
+
+  // -----------------------------
+  // DIET
+  // -----------------------------
+
+  let diet: Preferences['diet'] = null;
+
+  if (/vegan/.test(q)) {
+    diet = 'Vegan';
+    detected.push('vegan');
+  } else if (
+    /vegetarian|veggie|veg\b/.test(q) &&
+    !/non.?veg/.test(q)
+  ) {
+    diet = 'Vegetarian';
+    detected.push('vegetarian');
+  } else if (/non.?veg|nonvegetarian|chicken|mutton|beef|fish|seafood/.test(q)) {
+    diet = 'Non-Vegetarian';
+    detected.push('non-vegetarian');
+  }
+
+  // -----------------------------
+  // EXACT BUDGET
+  // -----------------------------
 
   let budget: BudgetRange | null = null;
-  if (/under 150|cheap|budget/.test(q)) { budget = 'Under ₹150'; detected.push('under ₹150'); }
-  else if (/under 200|under 250/.test(q)) { budget = '₹150–₹250'; detected.push('under ₹250'); }
-  else if (/under 300|under 350|under 400/.test(q)) { budget = '₹250–₹400'; detected.push('under ₹400'); }
-  else if (/400|expensive|premium|fancy/.test(q)) { budget = '₹400+'; detected.push('premium'); }
+  let maxPrice: number | null = null;
 
-  const prefs: Preferences = { moods, cuisines, budget, time: null };
+  const budgetMatch = q.match(
+    /(?:under|below|less than|max(?:imum)?|within)\s*₹?\s*(\d+)/
+  );
 
-  if (/vegetarian|veggie|veg /.test(q) && !/non.?veg/.test(q)) {
-    detected.push('vegetarian');
+  if (budgetMatch) {
+    maxPrice = Number(budgetMatch[1]);
+
+    if (maxPrice < 150) {
+      budget = 'Under ₹150';
+    } else if (maxPrice < 250) {
+      budget = '₹150–₹250';
+    } else if (maxPrice < 400) {
+      budget = '₹250–₹400';
+    } else {
+      budget = '₹400+';
+    }
+
+    detected.push(`under ₹${maxPrice}`);
+  } else if (/cheap|budget/.test(q)) {
+    maxPrice = 200;
+    budget = '₹150–₹250';
+    detected.push('budget-friendly');
+  } else if (/premium|expensive|fancy/.test(q)) {
+    budget = '₹400+';
+    detected.push('premium');
   }
-  if (/vegan/.test(q)) {
-    detected.push('vegan');
-  }
-  if (/quick|fast|under 20|10 min|15 min/.test(q)) {
+
+  // -----------------------------
+  // EXACT PREPARATION TIME
+  // -----------------------------
+
+  let maxPrepTime: number | null = null;
+  let exactTimeAllowed = false;
+
+  const strictTimeMatch = q.match(
+    /(?:under|below|less than)\s*(\d+)\s*(?:min|mins|minutes)/
+  );
+
+  const inclusiveTimeMatch = q.match(
+    /(?:within|in|maximum of|up to|at most)\s*(\d+)\s*(?:min|mins|minutes)/
+  );
+
+  const exactTimeMatch = q.match(
+    /(?:exactly|around)\s*(\d+)\s*(?:min|mins|minutes)/
+  );
+
+  if (strictTimeMatch) {
+    maxPrepTime = Number(strictTimeMatch[1]);
+    exactTimeAllowed = false;
+    detected.push(`under ${maxPrepTime} minutes`);
+  } else if (inclusiveTimeMatch) {
+    maxPrepTime = Number(inclusiveTimeMatch[1]);
+    exactTimeAllowed = true;
+    detected.push(`within ${maxPrepTime} minutes`);
+  } else if (exactTimeMatch) {
+    maxPrepTime = Number(exactTimeMatch[1]);
+    exactTimeAllowed = true;
+    detected.push(`around ${maxPrepTime} minutes`);
+  } else if (/quick|fast|in a hurry/.test(q)) {
+    maxPrepTime = 20;
+    exactTimeAllowed = false;
     detected.push('quick');
   }
 
-  return { prefs, detected };
+  // -----------------------------
+  // SPICE LEVEL
+  // -----------------------------
+
+  let minSpiceLevel: number | null = null;
+
+  if (/extremely spicy|very spicy|extra spicy|super spicy/.test(q)) {
+    minSpiceLevel = 3;
+    detected.push('very spicy');
+  } else if (/spicy|hot|chili|chilli|fire/.test(q)) {
+    minSpiceLevel = 2;
+  }
+
+  // -----------------------------
+  // BUILD PREFERENCES
+  // -----------------------------
+
+  const prefs: Preferences = {
+    moods,
+    cuisines,
+    budget,
+    time: null,
+    diet,
+    maxPrice,
+    maxPrepTime,
+    exactTimeAllowed,
+    minSpiceLevel,
+  };
+
+  return {
+    prefs,
+    detected,
+  };
 }
 
 function generateResponse(text: string): ChatMessage {
@@ -70,50 +229,58 @@ function generateResponse(text: string): ChatMessage {
   if (detected.length === 0) {
     return {
       role: 'ai',
-      content: "I'd love to help you find something delicious! Could you tell me a bit more — what mood are you in (spicy, comfort, healthy, hungry), what cuisine you prefer (Indian, Italian, Asian, Mexican), your budget (under ₹200, under ₹400), or how much time you have? For example: 'I want something spicy and vegetarian under ₹200.'",
+      content:
+        "I'd love to help you find something delicious! Tell me your mood, cuisine, dietary preference, budget, spice level, or preparation time. For example: \"I want spicy vegetarian food under ₹200.\"",
     };
   }
 
-  const isVeg = /vegetarian|veggie|vegan/.test(text.toLowerCase()) && !/non.?veg/.test(text.toLowerCase());
-  const isVegan = /vegan/.test(text.toLowerCase());
+  // Use the new recommendation engine.
+  const recommendations = recommendDishes(
+    prefs,
+    [],
+    3
+  );
 
-  let filteredDishes = dishes;
-  if (isVegan) {
-    filteredDishes = dishes.filter((d) => d.diet === 'Vegan');
-  } else if (isVeg) {
-    filteredDishes = dishes.filter((d) => d.diet === 'Vegetarian' || d.diet === 'Vegan');
-  }
-
-  const scored = filteredDishes
-    .map((d) => {
-      const { score, reasons } = scoreDish(d, prefs);
-      return { dish: d, score, reasons };
-    })
-    .filter((r) => r.score > 0)
-    .sort((a, b) => b.score - a.score);
-
-  if (scored.length === 0) {
-    const fallback = recommendDishes(prefs, [], 3);
-    if (fallback.length > 0) {
-      return {
-        role: 'ai',
-        content: `I couldn't find a perfect match for everything, but based on what you said, here are some options you might enjoy:`,
-        dishes: fallback.map((f) => f.dish),
-      };
-    }
+  // No exact matches.
+  if (recommendations.length === 0) {
     return {
       role: 'ai',
-      content: "I'd love to help! Could you tell me more about what you're in the mood for? Try something like: 'I want something spicy and vegetarian under ₹200' or 'comfort food, Italian, under 30 minutes.'",
+      content:
+        `I couldn't find a dish that satisfies all of those requirements. 😕\n\nYou asked for: ${detected.slice(0, 6).join(', ')}.\n\nTry relaxing one requirement, such as increasing your budget or preparation time.`,
     };
   }
 
-  const top = scored[0];
-  const moreOptions = scored.slice(1, 3).map((s) => s.dish);
+  const top = recommendations[0];
 
-  const detectedStr = detected.slice(0, 4).join(', ');
-  let content = `Got you! 🍽️\n\nYou're looking for something ${detectedStr}.\n\nMy top match for you is:\n\n**${top.dish.name}**\n₹${top.dish.price} · ⭐ ${top.dish.rating} · ${top.dish.prepTime} min\n\n${top.reasons.slice(0, 2).join('. ')}.\n\nWant to explore more options?`;
+  const moreOptions = recommendations
+    .slice(1)
+    .map((item) => item.dish);
 
-  return { role: 'ai', content, dishes: [top.dish, ...moreOptions] };
+  const detectedStr = detected
+    .slice(0, 6)
+    .join(', ');
+
+  const reasons = top.reasons
+    .slice(0, 3)
+    .join('. ');
+
+  const content =
+    `Got you! 🍽️\n\n` +
+    `You're looking for: ${detectedStr}.\n\n` +
+    `My top match is:\n\n` +
+    `**${top.dish.name}**\n` +
+    `₹${top.dish.price} · ⭐ ${top.dish.rating} · ${top.dish.prepTime} min\n\n` +
+    `${reasons}.\n\n` +
+    `Here are some more matching options:`;
+
+  return {
+    role: 'ai',
+    content,
+    dishes: [
+      top.dish,
+      ...moreOptions,
+    ],
+  };
 }
 
 export function MoodAIPage({ onNavigate, onViewDish }: MoodAIPageProps) {
@@ -136,57 +303,154 @@ export function MoodAIPage({ onNavigate, onViewDish }: MoodAIPageProps) {
     const trimmed = text.trim();
     if (!trimmed || typing) return;
 
-    setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', content: trimmed },
+    ]);
+
     setInput('');
     setTyping(true);
 
     try {
+      /*
+       * STEP 1:
+       * Understand the user's request locally.
+       *
+       * This gives us hard constraints such as:
+       * - vegetarian
+       * - vegan
+       * - maximum price
+       * - maximum preparation time
+       * - minimum spice level
+       * - cuisine
+       * - mood
+       */
+      const { prefs, detected } =
+        analyzeMessage(trimmed);
+
+      /*
+       * STEP 2:
+       * Let our deterministic recommendation engine
+       * choose the valid dishes.
+       *
+       * The AI will NOT make this decision.
+       */
+      const recommendations = recommendDishes(
+        prefs,
+        [],
+        3
+      );
+
+      const candidateDishes =
+        recommendations.map(
+          (recommendation) =>
+            recommendation.dish
+        );
+
+      const candidateDishNames =
+        candidateDishes.map(
+          (dish) => dish.name
+        );
+
+      /*
+       * STEP 3:
+       * Prepare conversation history.
+       */
       const history = messages.map((msg) => ({
-        role: msg.role === 'ai' ? 'assistant' : 'user',
+        role:
+          msg.role === 'ai'
+            ? 'assistant'
+            : 'user',
         content: msg.content,
       }));
 
-      const response = await fetch('/api/mood-ai', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: trimmed,
-          history,
-        }),
-      });
+      /*
+       * STEP 4:
+       * Send the selected candidates to the AI.
+       *
+       * The API is instructed to explain ONLY these dishes.
+       */
+      const response = await fetch(
+        '/api/mood-ai',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            message: trimmed,
+            history,
+            candidateDishNames,
+          }),
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data?.error || 'AI request failed');
+        throw new Error(
+          data?.error ||
+            'AI request failed'
+        );
       }
 
-      const recommendedDishes: Dish[] = Array.isArray(data.dishIds)
-        ? data.dishIds
-            .map((id: string): Dish | undefined =>
-              dishes.find((dish: Dish) => dish.id === id)
-            )
-            .filter((dish: Dish | undefined): dish is Dish => Boolean(dish))
-        : [];
+      /*
+       * STEP 5:
+       * Use the candidate dishes selected
+       * by our recommendation engine.
+       *
+       * We no longer depend on the AI's
+       * response text to discover dishes.
+       */
+      const recommendedDishes: Dish[] =
+        candidateDishes;
+
+      /*
+       * If there are no valid candidates,
+       * show a clear message instead of
+       * allowing the AI to invent alternatives.
+       */
+      let aiContent =
+        data.message ||
+        'Sorry, I could not generate a response.';
+
+      if (
+        recommendations.length === 0
+      ) {
+        aiContent =
+          `I couldn't find a dish that satisfies all of your requirements. 😕\n\n` +
+          `You asked for: ${
+            detected.length > 0
+              ? detected
+                  .slice(0, 6)
+                  .join(', ')
+              : trimmed
+          }.\n\n` +
+          `Try relaxing one requirement, such as increasing your budget or preparation time.`;
+      }
 
       setMessages((prev) => [
         ...prev,
         {
           role: 'ai',
-          content: data.message || 'Sorry, I could not generate a response.',
-          dishes: recommendedDishes,
+          content: aiContent,
+          dishes:
+            recommendedDishes,
         },
       ]);
     } catch (error) {
-      console.error('MOODPLATE AI error:', error);
+      console.error(
+        'MOODPLATE AI error:',
+        error
+      );
 
       setMessages((prev) => [
         ...prev,
         {
           role: 'ai',
-          content: 'Sorry, something went wrong while connecting to MOODPLATE AI. Please try again.',
+          content:
+            'Sorry, something went wrong while connecting to MOODPLATE AI. Please try again.',
         },
       ]);
     } finally {
@@ -221,17 +485,25 @@ export function MoodAIPage({ onNavigate, onViewDish }: MoodAIPageProps) {
                     : 'bg-gradient-to-br from-brown-500 to-brown-700'
                 }`}>
                   {msg.role === 'ai' ? <Sparkles className="h-4 w-4 text-white" /> : <span className="text-xs font-bold text-white">You</span>}
-                </div>
-                <div className={`max-w-[80%] ${msg.role === 'user' ? 'items-end' : ''}`}>
-                  {msg.role === 'ai' && (
-                    <p className="text-xs font-bold text-coral-600 mb-1">MOODPLATE AI</p>
-                  )}
-                  <div className={`rounded-2xl px-4 py-3 ${
-                    msg.role === 'user'
-                      ? 'bg-coral-500/10 border border-coral-200'
-                      : 'bg-cream-100 border border-cream-200'
-                  }`}>
-                    <p className="text-sm text-brown-700 whitespace-pre-line">{msg.content}</p>
+			                </div>
+			                <div className={`max-w-[80%] ${msg.role === 'user' ? 'items-end' : ''}`}>
+			                  {msg.role === 'ai' && (
+			                    <p className="text-xs font-bold text-coral-600 mb-1">MOODPLATE AI</p>
+			                  )}
+			                  <div className={`rounded-2xl px-4 py-3 ${
+			                    msg.role === 'user'
+			                      ? 'bg-coral-500/10 border border-coral-200'
+			                      : 'bg-cream-100 border border-cream-200'
+			                  }`}>
+			                   <p className="text-sm text-brown-700 whitespace-pre-line">
+			  {msg.content.split(/(\*\*.*?\*\*)/g).map((part, i) =>
+			    part.startsWith('**') && part.endsWith('**') ? (
+			      <strong key={i}>{part.slice(2, -2)}</strong>
+			    ) : (
+			      part
+			    )
+			  )}
+	</p>
                   </div>
 
                   {msg.dishes && msg.dishes.length > 0 && (
