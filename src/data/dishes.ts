@@ -294,8 +294,6 @@ export function scoreDish(dish: Dish, prefs: Preferences): { score: number; reas
     }
   }
 
-  score += dish.popularity / 100;
-
   return { score, reasons };
 }
 
