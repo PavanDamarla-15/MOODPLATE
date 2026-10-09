@@ -1,150 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-const menu = [
-  {
-    name: 'Creamy Mushroom Pasta',
-    price: 289,
-    cuisine: 'Italian',
-    diet: 'Vegetarian',
-    moods: ['Comfort', 'Hungry'],
-    prepTime: 25,
-    description: 'Creamy pasta with mushrooms, garlic, and parmesan.',
-  },
-  {
-    name: 'Paneer Tikka Wrap',
-    price: 189,
-    cuisine: 'Indian',
-    diet: 'Vegetarian',
-    moods: ['Spicy', 'Hungry', 'Late Night'],
-    prepTime: 20,
-    description: 'Spicy grilled paneer wrapped with mint chutney and onions.',
-  },
-  {
-    name: 'Butter Chicken Bowl',
-    price: 349,
-    cuisine: 'Indian',
-    diet: 'Non-Vegetarian',
-    moods: ['Comfort', 'Celebrating', 'Hungry'],
-    prepTime: 35,
-    description: 'Chicken in tomato-butter gravy with basmati rice.',
-  },
-  {
-    name: 'Wood-Fired Margherita Pizza',
-    price: 399,
-    cuisine: 'Italian',
-    diet: 'Vegetarian',
-    moods: ['Comfort', 'Celebrating', 'Hungry'],
-    prepTime: 30,
-    description: 'Classic pizza with tomato, mozzarella, and basil.',
-  },
-  {
-    name: 'Spicy Tonkotsu Ramen',
-    price: 329,
-    cuisine: 'Asian',
-    diet: 'Non-Vegetarian',
-    moods: ['Spicy', 'Comfort', 'Late Night'],
-    prepTime: 30,
-    description: 'Rich ramen with chili oil, noodles, and soft-boiled egg.',
-  },
-  {
-    name: 'Garden Quinoa Buddha Bowl',
-    price: 249,
-    cuisine: 'Healthy',
-    diet: 'Vegan',
-    moods: ['Healthy'],
-    prepTime: 15,
-    description: 'Quinoa, roasted vegetables, avocado, chickpeas, and tahini.',
-  },
-  {
-    name: 'Loaded Cheeseburger',
-    price: 299,
-    cuisine: 'Fast Food',
-    diet: 'Non-Vegetarian',
-    moods: ['Hungry', 'Late Night'],
-    prepTime: 20,
-    description: 'Beef burger with cheddar, onions, sauce, and fries.',
-  },
-  {
-    name: 'Street-Style Taco Platter',
-    price: 279,
-    cuisine: 'Mexican',
-    diet: 'Non-Vegetarian',
-    moods: ['Spicy', 'Celebrating', 'Hungry'],
-    prepTime: 25,
-    description: 'Chicken tacos with salsa, guacamole, and lime.',
-  },
-  {
-    name: 'Steamed Veg Momos',
-    price: 149,
-    cuisine: 'Asian',
-    diet: 'Vegetarian',
-    moods: ['Hungry', 'Healthy', 'Late Night'],
-    prepTime: 20,
-    description: 'Steamed vegetable dumplings with spicy chutney.',
-  },
-  {
-    name: 'Chocolate Lava Cake',
-    price: 199,
-    cuisine: 'Italian',
-    diet: 'Vegetarian',
-    moods: ['Celebrating', 'Comfort'],
-    prepTime: 15,
-    description: 'Warm chocolate cake with a molten chocolate center.',
-  },
-  {
-    name: 'Paneer Butter Masala',
-    price: 259,
-    cuisine: 'Indian',
-    diet: 'Vegetarian',
-    moods: ['Comfort', 'Celebrating', 'Hungry'],
-    prepTime: 30,
-    description: 'Paneer in creamy tomato-cashew gravy with butter.',
-  },
-  {
-    name: 'Vietnamese Beef Pho',
-    price: 319,
-    cuisine: 'Asian',
-    diet: 'Non-Vegetarian',
-    moods: ['Comfort', 'Healthy'],
-    prepTime: 40,
-    description: 'Beef broth with rice noodles, sliced beef, and herbs.',
-  },
-  {
-    name: 'Grilled Chicken Power Salad',
-    price: 229,
-    cuisine: 'Healthy',
-    diet: 'Non-Vegetarian',
-    moods: ['Healthy'],
-    prepTime: 15,
-    description: 'Greens with grilled chicken, avocado, quinoa, and lemon dressing.',
-  },
-  {
-    name: 'Black Bean Veg Tacos',
-    price: 189,
-    cuisine: 'Mexican',
-    diet: 'Vegan',
-    moods: ['Spicy', 'Healthy', 'Hungry'],
-    prepTime: 18,
-    description: 'Black bean tacos with corn salsa, avocado, and pickled onions.',
-  },
-];
-
-const dishIdMap: Record<string, string> = {
-  'Creamy Mushroom Pasta': 'creamy-mushroom-pasta',
-  'Paneer Tikka Wrap': 'paneer-tikka-wrap',
-  'Butter Chicken Bowl': 'butter-chicken-bowl',
-  'Wood-Fired Margherita Pizza': 'margherita-pizza',
-  'Spicy Tonkotsu Ramen': 'spicy-ramen-bowl',
-  'Garden Quinoa Buddha Bowl': 'veggie-quinoa-bowl',
-  'Loaded Cheeseburger': 'loaded-beef-burger',
-  'Street-Style Taco Platter': 'mexican-taco-platter',
-  'Steamed Veg Momos': 'steamed-momo-platter',
-  'Chocolate Lava Cake': 'chocolate-lava-cake',
-  'Paneer Butter Masala': 'paneer-butter-masala',
-  'Vietnamese Beef Pho': 'vietnamese-pho',
-  'Grilled Chicken Power Salad': 'grilled-chicken-salad',
-  'Black Bean Veg Tacos': 'spicy-veg-tacos',
-};
+import { dishes, parseMenuQuery } from '../src/data/dishes';
+import type { Dish } from '../src/data/dishes';
 
 export default async function handler(
   req: VercelRequest,
@@ -161,6 +17,7 @@ export default async function handler(
       message,
       history = [],
       candidateDishNames = [],
+      queryType,
     } = req.body ?? {};
 
     if (!message || typeof message !== 'string') {
@@ -169,40 +26,51 @@ export default async function handler(
       });
     }
 
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.OPENROUTER_MODEL;
+    const trimmedMessage = message.trim();
+    const parsedQuery = parseMenuQuery(trimmedMessage, dishes);
+    const isDirectAvailability = queryType === 'availability' || parsedQuery.isDirectDishQuery;
 
-    if (!apiKey || !model) {
-      return res.status(500).json({
-        error: 'OpenRouter configuration is missing',
+    // If the user is asking about the availability of a specific dish and it's not on the menu:
+    if (isDirectAvailability && parsedQuery.matches.length === 0) {
+      const requestedName = parsedQuery.requestedItem || trimmedMessage;
+      return res.status(200).json({
+        message: `Sorry, **${requestedName}** is not available on our menu. We do not currently serve this item.`,
+        dishIds: [],
       });
     }
 
-    /*
-     * IMPORTANT:
-     * The frontend recommendation engine has already selected
-     * the dishes that satisfy the user's requirements.
-     *
-     * The AI is NOT allowed to select different dishes.
-     */
-    const candidates = Array.isArray(candidateDishNames)
-      ? candidateDishNames
-          .filter((name: unknown): name is string =>
-            typeof name === 'string'
-          )
-          .map((name: string) =>
-            menu.find((dish) => dish.name === name)
-          )
-          .filter((dish): dish is (typeof menu)[number] =>
-            Boolean(dish)
-          )
-      : [];
+    // Resolve candidates using actual dish data from src/data/dishes.ts
+    let candidateMenu: Dish[] = [];
 
-    const candidateMenu = candidates;
+    if (Array.isArray(candidateDishNames) && candidateDishNames.length > 0) {
+      candidateMenu = candidateDishNames
+        .filter((name: unknown): name is string => typeof name === 'string' && name.trim().length > 0)
+        .map((name: string) => {
+          const lower = name.trim().toLowerCase();
+          return dishes.find(
+            (dish) => dish.name.toLowerCase() === lower || dish.id.toLowerCase() === lower
+          );
+        })
+        .filter((dish): dish is Dish => Boolean(dish));
+    }
 
-    // No valid dishes means the user's hard constraints cannot be satisfied.
-    // Do not call the AI or allow it to invent an alternative.
+    // If no candidates were passed from frontend, derive them from parsed query
     if (candidateMenu.length === 0) {
+      if (parsedQuery.isDirectDishQuery && parsedQuery.matches.length > 0) {
+        candidateMenu = parsedQuery.matches.slice(0, 4);
+      }
+    }
+
+    // If still no valid dishes can be found:
+    if (candidateMenu.length === 0) {
+      if (isDirectAvailability) {
+        const requestedName = parsedQuery.requestedItem || trimmedMessage;
+        return res.status(200).json({
+          message: `Sorry, **${requestedName}** is not available on our menu. We do not currently serve this item.`,
+          dishIds: [],
+        });
+      }
+
       return res.status(200).json({
         message:
           "I couldn't find a dish that matches all of those requirements. 😕 Try relaxing one requirement, such as increasing your budget, allowing more preparation time, or choosing another cuisine.",
@@ -210,102 +78,126 @@ export default async function handler(
       });
     }
 
+    const candidatePromptData = candidateMenu.map((d) => ({
+      id: d.id,
+      name: d.name,
+      price: d.price,
+      cuisine: d.cuisine,
+      diet: d.diet,
+      moods: d.moods,
+      prepTime: d.prepTime,
+      description: d.description,
+      rating: d.rating,
+      spiceLevel: d.spiceLevel,
+    }));
+
     const systemPrompt = `
-You are MOODPLATE AI, the food recommendation assistant.
+You are MOODPLATE AI, the intelligent food recommendation and menu assistant for the MOODPLATE restaurant.
 
-IMPORTANT:
-The recommendation engine has already selected the valid dishes.
-
-You MUST NOT choose a different dish.
-
-You MUST NOT invent dishes.
-
-You MUST NOT recommend dishes outside the CANDIDATE DISHES list below.
-
-Your job is ONLY to explain the candidate dishes and respond naturally to the user's request.
-
-If candidate dishes are provided, recommend only from those candidates.
-
-If the user asks for a dish that is not available, explain that it is not currently available.
+IMPORTANT MENU AVAILABILITY RULES:
+- The actual restaurant menu dishes available for this request are listed below in CANDIDATE DISHES.
+- You MUST NOT recommend or invent dishes outside the CANDIDATE DISHES list.
+- Do NOT suggest unrelated dishes if the user is asking about the availability of a specific item.
+- If the user asks whether a specific dish is available and it is in CANDIDATE DISHES, confirm enthusiastically that it is available on our menu, and share its details (price in ₹, description, preparation time).
+- If the user asks for suggestions or recommendations, recommend from the CANDIDATE DISHES list explaining why they match the user's mood or request.
+- Keep responses friendly, concise, and appetizing.
+- Always use the exact dish names and prices in ₹ (Rupees) as provided.
 
 CANDIDATE DISHES:
-${JSON.stringify(candidateMenu, null, 2)}
+${JSON.stringify(candidatePromptData, null, 2)}
 
-Keep responses friendly, concise, and useful.
-
-Use exact dish names and prices.
-
-IMPORTANT RESPONSE FORMAT:
-- Do NOT use Markdown links.
-- Do NOT include image URLs.
-- Do NOT include HTML.
-- Do NOT create buttons or links.
-- Do NOT repeat the full dish card information.
-- Do NOT include ratings, image URLs, or extra metadata unless specifically asked.
-- Mention dish names and prices naturally in your response.
-- The MOODPLATE website will display the dish cards separately.
+RESPONSE GUIDELINES:
+- Do NOT use Markdown links, image URLs, or HTML.
+- Mention dish names and prices naturally.
+- The website will display interactive dish cards for these dishes automatically.
 `;
 
-    const response = await fetch(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer':
-            process.env.APP_URL || 'http://localhost:3000',
-          'X-Title': 'MOODPLATE AI',
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: 'system',
-              content: systemPrompt,
-            },
-            ...history,
-            {
-              role: 'user',
-              content: message,
-            },
-          ],
-        }),
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    const model = process.env.OPENROUTER_MODEL;
+
+    // Helper for generating deterministic fallback response if OpenRouter is unreachable
+    const generateFallbackReply = (): string => {
+      if (isDirectAvailability) {
+        if (candidateMenu.length === 1) {
+          const item = candidateMenu[0];
+          return `Yes! We have **${item.name}** available on our menu for ₹${item.price}. ${item.description}`;
+        }
+        return `Yes! We have the following matching options available on our menu:\n\n${candidateMenu
+          .map((d) => `• **${d.name}** (₹${d.price}) — ${d.description}`)
+          .join('\n')}`;
       }
-    );
 
-    if (!response.ok) {
-      const errorText = await response.text();
+      const top = candidateMenu[0];
+      const others = candidateMenu.slice(1);
+      let reply = `Here are some great options matching your preferences:\n\n**${top.name}** (₹${top.price}) — ${top.description}`;
+      if (others.length > 0) {
+        reply += `\n\nOther delicious choices: ${others.map((d) => `**${d.name}** (₹${d.price})`).join(', ')}.`;
+      }
+      return reply;
+    };
 
-      return res.status(response.status).json({
-        error: 'OpenRouter request failed',
-        details: errorText,
+    if (!apiKey || !model) {
+      return res.status(200).json({
+        message: generateFallbackReply(),
+        dishIds: candidateMenu.map((d) => d.id),
       });
     }
 
-    const data = await response.json();
+    try {
+      const response = await fetch(
+        'https://openrouter.ai/api/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer':
+              process.env.APP_URL || 'http://localhost:3000',
+            'X-Title': 'MOODPLATE AI',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: 'system',
+                content: systemPrompt,
+              },
+              ...history,
+              {
+                role: 'user',
+                content: trimmedMessage,
+              },
+            ],
+          }),
+        }
+      );
 
-    const reply =
-      data?.choices?.[0]?.message?.content ||
-      'Here are some dishes that match your preferences.';
+      if (!response.ok) {
+        console.warn('OpenRouter API returned error, falling back to deterministic response');
+        return res.status(200).json({
+          message: generateFallbackReply(),
+          dishIds: candidateMenu.map((d) => d.id),
+        });
+      }
 
-    /*
-     * Return ONLY the candidate dish IDs.
-     *
-     * We no longer scan the AI's text looking for dish names.
-     * This prevents the AI from accidentally adding another dish.
-     */
-    const dishIds = candidates
-      .map((dish) => dishIdMap[dish.name])
-      .filter(Boolean);
+      const data = await response.json();
+      const reply =
+        data?.choices?.[0]?.message?.content ||
+        generateFallbackReply();
 
-    return res.status(200).json({
-      message: reply,
-      dishIds,
-    });
+      return res.status(200).json({
+        message: reply,
+        dishIds: candidateMenu.map((d) => d.id),
+      });
+    } catch (fetchErr) {
+      console.warn('Failed to call OpenRouter, falling back to deterministic response:', fetchErr);
+      return res.status(200).json({
+        message: generateFallbackReply(),
+        dishIds: candidateMenu.map((d) => d.id),
+      });
+    }
   } catch (error) {
     console.error('MOODPLATE AI error:', error);
-
     return res.status(500).json({
       error: 'Something went wrong while contacting the AI.',
     });

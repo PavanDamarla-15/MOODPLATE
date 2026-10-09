@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Sparkles, Send, ArrowRight, Lightbulb, UtensilsCrossed } from 'lucide-react';
-import { dishes, scoreDish, recommendDishes } from '@/data/dishes';
+import { dishes, scoreDish, recommendDishes, parseMenuQuery } from '@/data/dishes';
 import type { Dish, Preferences, Mood, Cuisine, BudgetRange } from '@/data/dishes';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 import type { Page } from '@/components/Navbar';
@@ -341,45 +341,92 @@ export function MoodAIPage({ onNavigate, onViewDish }: MoodAIPageProps) {
     setTyping(true);
 
     try {
-      /*
-       * STEP 1:
-       * Understand the user's request locally.
-       *
-       * This gives us hard constraints such as:
-       * - vegetarian
-       * - vegan
-       * - maximum price
-       * - maximum preparation time
-       * - minimum spice level
-       * - cuisine
-       * - mood
-       */
-      const { prefs, detected } =
-        analyzeMessage(trimmed);
+      // 1. Check if the user is asking about the availability of a specific dish
+      const parsedQuery = parseMenuQuery(trimmed, dishes);
 
-      /*
-       * STEP 2:
-       * Let our deterministic recommendation engine
-       * choose the valid dishes.
-       *
-       * The AI will NOT make this decision.
-       */
-      const recommendations = recommendDishes(
-        prefs,
-        [],
-        3
-      );
+      if (parsedQuery.isDirectDishQuery) {
+        // Dish is NOT in the menu
+        if (parsedQuery.matches.length === 0) {
+          const requested = parsedQuery.requestedItem || trimmed;
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: 'ai',
+              content: `Sorry, **${requested}** is currently not available on our menu. We do not have this dish in our offerings.`,
+              dishes: [],
+            },
+          ]);
+          setTyping(false);
+          return;
+        }
 
-      const candidateDishes =
-        recommendations.map(
-          (recommendation) =>
-            recommendation.dish
-        );
+        // Dish IS in the menu
+        const matchingDishes = parsedQuery.matches.slice(0, 4);
+        const candidateDishNames = matchingDishes.map((d) => d.name);
 
-      const candidateDishNames =
-        candidateDishes.map(
-          (dish) => dish.name
-        );
+        const history = messages.map((msg) => ({
+          role: msg.role === 'ai' ? 'assistant' : 'user',
+          content: msg.content,
+        }));
+
+        try {
+          const response = await fetch('/api/mood-ai', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              message: trimmed,
+              history,
+              candidateDishNames,
+              queryType: 'availability',
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const aiContent =
+              data.message ||
+              `Yes! We have **${matchingDishes[0].name}** available on our menu for ₹${matchingDishes[0].price}.`;
+
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: 'ai',
+                content: aiContent,
+                dishes: matchingDishes,
+              },
+            ]);
+            setTyping(false);
+            return;
+          }
+        } catch (apiErr) {
+          console.warn('API call failed, using deterministic availability confirmation:', apiErr);
+        }
+
+        // Fallback for direct dish query if API was unreachable
+        const fallbackContent =
+          matchingDishes.length === 1
+            ? `Yes! We have **${matchingDishes[0].name}** available on our menu for ₹${matchingDishes[0].price}!\n\n${matchingDishes[0].description}`
+            : `Yes! We have the following matching dishes available on our menu:`;
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'ai',
+            content: fallbackContent,
+            dishes: matchingDishes,
+          },
+        ]);
+        setTyping(false);
+        return;
+      }
+
+      // 2. Normal mood/preference recommendation flow
+      const { prefs, detected } = analyzeMessage(trimmed);
+      const recommendations = recommendDishes(prefs, [], 3);
+      const candidateDishes = recommendations.map((r) => r.dish);
+      const candidateDishNames = candidateDishes.map((d) => d.name);
 
       /*
        * STEP 3:
@@ -469,18 +516,11 @@ export function MoodAIPage({ onNavigate, onViewDish }: MoodAIPageProps) {
         },
       ]);
     } catch (error) {
-      console.error(
-        'MOODPLATE AI error:',
-        error
-      );
-
+      console.warn('MOODPLATE AI error, using local fallback:', error);
+      const fallback = generateResponse(trimmed);
       setMessages((prev) => [
         ...prev,
-        {
-          role: 'ai',
-          content:
-            'Sorry, something went wrong while connecting to MOODPLATE AI. Please try again.',
-        },
+        fallback,
       ]);
     } finally {
       setTyping(false);

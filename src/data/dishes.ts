@@ -358,7 +358,6 @@ export const dishes: Dish[] = [
     spiceLevel: 1,
     popularity: 79,
   },
-,
   {
     id: 'in-001',
     name: 'Kulfi',
@@ -3344,11 +3343,11 @@ export interface Preferences {
   time: TimeRange | null;
 
   // Hard constraints
-  diet: DietType | null;
-  maxPrice: number | null;
-  maxPrepTime: number | null;
-  exactTimeAllowed: boolean;
-  minSpiceLevel: number | null;
+  diet?: DietType | null;
+  maxPrice?: number | null;
+  maxPrepTime?: number | null;
+  exactTimeAllowed?: boolean;
+  minSpiceLevel?: number | null;
 }
 
 export function scoreDish(
@@ -3374,7 +3373,7 @@ export function scoreDish(
   }
 
   if (
-    prefs.maxPrice !== null &&
+    prefs.maxPrice != null &&
     dish.price > prefs.maxPrice
   ) {
     return {
@@ -3394,7 +3393,7 @@ export function scoreDish(
     };
   }
 
-  if (prefs.maxPrepTime !== null) {
+  if (prefs.maxPrepTime != null) {
     const exceedsTime = prefs.exactTimeAllowed
       ? dish.prepTime > prefs.maxPrepTime
       : dish.prepTime >= prefs.maxPrepTime;
@@ -3408,7 +3407,7 @@ export function scoreDish(
   }
 
   if (
-    prefs.minSpiceLevel !== null &&
+    prefs.minSpiceLevel != null &&
     dish.spiceLevel < prefs.minSpiceLevel
   ) {
     return {
@@ -3465,7 +3464,7 @@ export function scoreDish(
   }
 
   if (
-    prefs.minSpiceLevel !== null &&
+    prefs.minSpiceLevel != null &&
     dish.spiceLevel >= prefs.minSpiceLevel
   ) {
     score += 3;
@@ -3507,4 +3506,185 @@ export function recommendDishes(
     .filter((result) => result.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, count);
+}
+
+const MOOD_KEYWORDS = new Set([
+  'spicy', 'hot', 'chili', 'chilli', 'fire',
+  'comfort', 'cozy', 'warm', 'home', 'tired', 'sad', 'stress',
+  'health', 'healthy', 'fit', 'clean', 'light', 'nutrit', 'salad', 'protein',
+  'hungry', 'starv', 'starving', 'filling', 'satisfy',
+  'celebr', 'celebrating', 'party', 'special', 'treat', 'birthday',
+  'late', 'night', 'midnight'
+]);
+
+const GENERIC_QUERY_WORDS = new Set([
+  'food', 'something', 'anything', 'meal', 'dish', 'dishes', 'snack',
+  'dinner', 'lunch', 'breakfast', 'options', 'recommend', 'recommendation',
+  'suggest', 'suggestions', 'surprise', 'surprise me', 'craving', 'cravings'
+]);
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function findDishesByNameOrQuery(query: string, list: Dish[] = dishes): Dish[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  // 1. Exact match on name or ID
+  const exact = list.filter(
+    (d) => d.name.toLowerCase() === q || d.id.toLowerCase() === q
+  );
+  if (exact.length > 0) return exact;
+
+  // 2. Dish name contains query as full substring or query contains dish name
+  const substringMatches = list.filter((d) => {
+    const name = d.name.toLowerCase();
+    return name.includes(q) || (q.length >= 4 && q.includes(name));
+  });
+  if (substringMatches.length > 0) return substringMatches;
+
+  // 3. Token-based matching
+  const stopWords = new Set([
+    'the', 'a', 'an', 'some', 'any', 'food', 'dish', 'dishes', 'please',
+    'order', 'want', 'have', 'serve', 'with', 'plate', 'bowl', 'of', 'in', 'and'
+  ]);
+  const tokens = q
+    .split(/[\s,–—\-_/]+/)
+    .map((w) => w.replace(/[^a-z0-9]/gi, '').toLowerCase())
+    .filter((w) => w.length > 2 && !stopWords.has(w));
+
+  if (tokens.length === 0) return [];
+
+  // Match if all significant tokens appear as whole words in dish name
+  const allTokensInName = list.filter((d) => {
+    const name = d.name.toLowerCase();
+    return tokens.every((token) => {
+      const singular = token.endsWith('s') ? token.slice(0, -1) : token;
+      const reToken = new RegExp('(?:^|[\\s\\-_])' + escapeRegExp(token) + '(?:$|[\\s\\-_]|s\\b)', 'i');
+      const reSingular = new RegExp('(?:^|[\\s\\-_])' + escapeRegExp(singular) + '(?:$|[\\s\\-_]|s\\b)', 'i');
+      return reToken.test(name) || (singular.length > 2 && reSingular.test(name));
+    });
+  });
+  if (allTokensInName.length > 0) return allTokensInName;
+
+  // Match if ANY significant food token (>=4 chars) appears as whole word in dish name
+  const anyTokenInName = list.filter((d) => {
+    const name = d.name.toLowerCase();
+    return tokens.some((token) => {
+      if (token.length < 4) return false;
+      const singular = token.endsWith('s') ? token.slice(0, -1) : token;
+      const reToken = new RegExp('(?:^|[\\s\\-_])' + escapeRegExp(token) + '(?:$|[\\s\\-_]|s\\b)', 'i');
+      const reSingular = new RegExp('(?:^|[\\s\\-_])' + escapeRegExp(singular) + '(?:$|[\\s\\-_]|s\\b)', 'i');
+      return reToken.test(name) || (singular.length >= 4 && reSingular.test(name));
+    });
+  });
+  if (anyTokenInName.length > 0) return anyTokenInName;
+
+  return [];
+}
+
+export interface MenuQueryResult {
+  isDirectDishQuery: boolean;
+  requestedItem: string | null;
+  matches: Dish[];
+}
+
+export function parseMenuQuery(text: string, list: Dish[] = dishes): MenuQueryResult {
+  const q = text.trim();
+  const cleaned = q.replace(/[?!.]+$/, '').trim();
+  const lower = cleaned.toLowerCase();
+
+  // Check if it's explicitly asking for suggestions/recommendations or general craving
+  const isGenericSuggestion =
+    /^(?:recommend|suggest|what should|surprise me|give me suggestions|show me options)\b/i.test(lower) ||
+    /^(?:i want|i feel like having|craving|looking for)\s+(?:something|anything|food|a meal|a snack)\b/i.test(lower) ||
+    /^something\s+/i.test(lower);
+
+  // Check for explicit availability patterns:
+  // "Do you have X", "Is X available", "Can I get X", "Do you serve X", etc.
+  const availabilityPatterns = [
+    /^(?:do you (?:have|serve|make|offer|get)|have you got|got any|is there (?:any)?)\s+(?:a|an|the|any)?\s*(.+)$/i,
+    /^(?:is|are)\s+(?:the|any)?\s*(.+?)\s+(?:available|on the menu|in the menu|served)$/i,
+    /^(?:can i (?:get|have|order))\s+(?:a|an|the|any)?\s*(.+)$/i,
+    /^(?:i want to (?:order|eat|have))\s+(?:a|an|the|any)?\s*(.+)$/i,
+    /^(?:do you have)\s+(.+)$/i,
+    /^(?:is|are)\s+(.+)\s+available$/i,
+  ];
+
+  for (const pat of availabilityPatterns) {
+    const match = cleaned.match(pat);
+    if (match && match[1]) {
+      const item = match[1].trim();
+      const itemLower = item.toLowerCase();
+
+      // If the extracted item is just "something spicy" or "food", it's a mood query, not a specific dish
+      const isItemGeneric =
+        /^(?:something|anything|food|meal|snack)\b/i.test(itemLower) ||
+        Array.from(MOOD_KEYWORDS).some((m) => itemLower === m || itemLower === `something ${m}`);
+
+      if (!isItemGeneric) {
+        const matches = findDishesByNameOrQuery(item, list);
+        return {
+          isDirectDishQuery: true,
+          requestedItem: item,
+          matches,
+        };
+      }
+    }
+  }
+
+  // Check for "available" or "on the menu" anywhere in sentence
+  const anywhereAvailable = cleaned.match(/(.+?)\s+(?:available|on the menu|in the menu)/i);
+  if (anywhereAvailable && anywhereAvailable[1]) {
+    const item = anywhereAvailable[1]
+      .replace(/^(?:is|are|do you have|can i get|do you serve)\s+(?:the|a|an)?/i, '')
+      .trim();
+    if (item.length > 1 && !/^(?:something|anything)\b/i.test(item)) {
+      const matches = findDishesByNameOrQuery(item, list);
+      return {
+        isDirectDishQuery: true,
+        requestedItem: item,
+        matches,
+      };
+    }
+  }
+
+  // If not a generic suggestion phrase, check if the input directly names a dish or specific food item
+  if (!isGenericSuggestion) {
+    // 1. Exact match with any dish name in the menu
+    const exactDish = list.find(
+      (d) => d.name.toLowerCase() === lower || d.id.toLowerCase() === lower
+    );
+    if (exactDish) {
+      return {
+        isDirectDishQuery: true,
+        requestedItem: exactDish.name,
+        matches: [exactDish],
+      };
+    }
+
+    // 2. Short input (1-4 words) that matches dishes in the menu
+    // e.g. "chocolate lava cake", "margherita pizza", "sushi", "momos"
+    const words = lower.replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/);
+    if (words.length > 0 && words.length <= 4) {
+      const isAllMood = words.every((w) => MOOD_KEYWORDS.has(w) || GENERIC_QUERY_WORDS.has(w));
+      if (!isAllMood) {
+        const matches = findDishesByNameOrQuery(cleaned, list);
+        if (matches.length > 0) {
+          return {
+            isDirectDishQuery: true,
+            requestedItem: cleaned,
+            matches,
+          };
+        }
+      }
+    }
+  }
+
+  return {
+    isDirectDishQuery: false,
+    requestedItem: null,
+    matches: [],
+  };
 }
